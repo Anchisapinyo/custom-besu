@@ -1,0 +1,46 @@
+version: '3.8'
+
+x-besu: &besu
+  # cpuset: 0-5 # perf
+  image: hyperledger/besu:latest
+
+services:
+  besu-node1:
+    << : *besu
+    hostname: besu-validator-1
+    volumes:
+      - "./data/:/var/lib/besu" # mount to host
+      - "./config/genesis.json:/config/genesis.json"
+      - "./config/key:/config/key" # mount to host
+    # environment:
+    #   - BESU_OPTS=-Xmx3g # perf
+    #   - BESU_OPTS="-XX:+HeapDumpOnOutOfMemoryError" # perf
+    command:
+      - --data-path=/var/lib/besu
+      - --genesis-file=/config/genesis.json
+      - --rpc-http-enabled
+      - --rpc-http-host=0.0.0.0
+      - --rpc-http-port=8545
+      - --rpc-ws-enabled
+      - --rpc-http-api=ETH,NET,CLIQUE,TXPOOL,WEB3
+      - --rpc-ws-api=ETH,NET,CLIQUE,TXPOOL,WEB3
+      - --rpc-http-cors-origins=*
+      - --miner-enabled
+      - --miner-coinbase=0x32d5a21376c0df3f98200a00380b06adee341b91
+      - --node-private-key-file=/config/key
+      - --nat-method=AUTO
+      - --host-allowlist=*
+      - --engine-host-allowlist=*
+      - --tx-pool-max-future-by-sender=100000
+      - --tx-pool-max-prioritized=100000
+      - --tx-pool-layer-max-capacity=125000000
+      - --rpc-http-max-active-connections=100000
+      - --rpc-http-max-batch-size=-1
+      - --Xplugin-rocksdb-max-open-files=4096 # perf
+      # - --Xplugin-rocksdb-cache-capacity=314572800 # perf
+      # - --Xplugin-rocksdb-background-thread-count=256 # perf
+      
+    ports:
+      - "30303:30303"
+      - "8545:8545"
+      - "8546:8546"
