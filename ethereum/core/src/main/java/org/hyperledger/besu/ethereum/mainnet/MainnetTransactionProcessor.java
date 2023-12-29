@@ -485,7 +485,17 @@ public class MainnetTransactionProcessor {
       final Wei coinbaseWeiDelta =
           coinbaseCalculator.price(usedGas, transactionGasPrice, blockHeader.getBaseFee());
 
-      coinbase.incrementBalance(coinbaseWeiDelta);
+      // coinbase.incrementBalance(coinbaseWeiDelta);
+
+      // loaffinity
+      // transfer an a half of transaction fee to coinbase
+      coinbase.incrementBalance(coinbaseWeiDelta.divide(2));
+
+      // loaffinity
+      // Add an additional address (committee) and distribute the other half of the transaction fee
+      final Address committeeAddress = Address.fromHexString("0x0000000000000000000000000000000000000777");
+      final var committee = worldState.getOrCreate(committeeAddress);
+      committee.incrementBalance(coinbaseWeiDelta.divide(2));
 
       initialFrame.getSelfDestructs().forEach(worldState::deleteAccount);
 

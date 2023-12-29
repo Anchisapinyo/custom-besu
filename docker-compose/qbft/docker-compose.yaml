@@ -1,7 +1,7 @@
 version: '3.8'
 
 x-besu: &besu
-  image: ais/fee1:23.10.4-SNAPSHOT-graalvm
+  image: hyperledger/besu:latest
 
 services:
   besu-node1:
