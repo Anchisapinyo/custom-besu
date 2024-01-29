@@ -465,7 +465,7 @@ public class MainnetTransactionProcessor {
           0L);
 
       // update the coinbase
-      final var coinbase = worldState.getOrCreate(miningBeneficiary);
+      //final var coinbase = worldState.getOrCreate(miningBeneficiary);
       final long usedGas = transaction.getGasLimit() - refundedGas;
       final CoinbaseFeePriceCalculator coinbaseCalculator;
       if (blockHeader.getBaseFee().isPresent()) {
