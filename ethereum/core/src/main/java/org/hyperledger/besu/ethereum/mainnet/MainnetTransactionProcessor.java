@@ -43,8 +43,10 @@ import org.hyperledger.besu.evm.processor.AbstractMessageProcessor;
 import org.hyperledger.besu.evm.tracing.OperationTracer;
 import org.hyperledger.besu.evm.worldstate.WorldUpdater;
 
+import java.math.BigInteger; // add BigInteger
 import java.util.Deque;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -485,17 +487,35 @@ public class MainnetTransactionProcessor {
       final Wei coinbaseWeiDelta =
           coinbaseCalculator.price(usedGas, transactionGasPrice, blockHeader.getBaseFee());
 
-      // coinbase.incrementBalance(coinbaseWeiDelta);
-
       // loaffinity
-      // transfer an a half of transaction fee to coinbase
-      coinbase.incrementBalance(coinbaseWeiDelta.divide(2));
+      // distribute transaction fee to system contract address.
+      // EIP-1352 - https://eips.ethereum.org/EIPS/eip-1352
+      if (initialFrame.getCode().isValid() && !transaction.isContractCreation()) {
+        // contract call transaction.
+        final BigInteger totalAmount = coinbaseWeiDelta.toBigInteger();
+        
+        // Define addresses and their corresponding percentages
+        final Map<Address, Integer> addressPercentages = Map.of(
+            Address.fromHexString("0x0000000000000000000000000000000000000777"), 25,
+            Address.fromHexString("0x0000000000000000000000000000000000000778"), 10,
+            miningBeneficiary, 65
+        );
 
-      // loaffinity
-      // Add an additional address (committee) and distribute the other half of the transaction fee
-      final Address committeeAddress = Address.fromHexString("0x0000000000000000000000000000000000000777");
-      final var committee = worldState.getOrCreate(committeeAddress);
-      committee.incrementBalance(coinbaseWeiDelta.divide(2));
+        // Calculate and distribute amounts based on percentages
+        distributeAmounts(worldState, totalAmount, addressPercentages);
+      } else {
+        // EOA to EOA transaction and contract creation transaction.
+        final BigInteger totalAmount = coinbaseWeiDelta.toBigInteger();
+        
+        // Define addresses and their corresponding percentages
+        final Map<Address, Integer> addressPercentages = Map.of(
+            Address.fromHexString("0x0000000000000000000000000000000000000777"), 50,
+            miningBeneficiary, 50
+        );
+
+        // Calculate and distribute amounts based on percentages
+        distributeAmounts(worldState, totalAmount, addressPercentages);
+      }
 
       initialFrame.getSelfDestructs().forEach(worldState::deleteAccount);
 
@@ -515,9 +535,16 @@ public class MainnetTransactionProcessor {
             gasUsedByTransaction, refundedGas, validationResult, initialFrame.getRevertReason());
       }
     } catch (final MerkleTrieException re) {
+      // loaffinity: add operationTracer
+      operationTracer.traceEndTransaction(
+          worldState.updater(), transaction, false, Bytes.EMPTY, List.of(), 0, 0L);
       // need to throw to trigger the heal
       throw re;
     } catch (final RuntimeException re) {
+      // loaffinity: add operationTracer
+      operationTracer.traceEndTransaction(
+          worldState.updater(), transaction, false, Bytes.EMPTY, List.of(), 0, 0L);
+
       LOG.error("Critical Exception Processing Transaction", re);
       return TransactionProcessingResult.invalid(
           ValidationResult.invalid(
@@ -546,6 +573,17 @@ public class MainnetTransactionProcessor {
         (transaction.getGasLimit() - gasRemaining) / gasCalculator.getMaxRefundQuotient();
     final long refundAllowance = Math.min(maxRefundAllowance, gasRefund);
     return gasRemaining + refundAllowance;
+  }
+
+  // loaffinity: add distributeAmounts
+  protected void distributeAmounts(final WorldUpdater worldStateUpdater, final BigInteger totalAmount, final Map<Address, Integer> addressPercentages) {
+    for (Map.Entry<Address, Integer> entry : addressPercentages.entrySet()) {
+        Address address = entry.getKey();
+        int percentage = entry.getValue();
+
+        final Wei amount = Wei.of(totalAmount.multiply(BigInteger.valueOf(percentage)).divide(BigInteger.valueOf(100)));
+        worldStateUpdater.getOrCreate(address).incrementBalance(amount);
+    }
   }
 
   private String printableStackTraceFromThrowable(final RuntimeException re) {
